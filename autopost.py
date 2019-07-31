@@ -12,7 +12,7 @@ import prodconf
 from pytz import utc
 
 logger = logging.getLogger("sgp-bot.main")
-formatStr='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+formatStr='%(process)d - %(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
 
 tz = 'America/Los_Angeles'
@@ -65,7 +65,7 @@ class Helper():
             mock.url = "FAKEURL"
             return mock
         else:
-            logger.debug("Submitting post with title %s"%title)
+            logger.info("Submitting post with title %s"%title)
             return self.sub.submit(title, selftext=text, send_replies=False)
 
     def updateSidebar(self, bar):
@@ -114,24 +114,24 @@ def beginJobService(rHelper):
         'default': SQLAlchemyJobStore(url='sqlite:///%s'%dbName)
     }
 
-    firstTrigger = CronTrigger(hour=22)
-    secondTrigger = CronTrigger(hour=10)
+    firstTrigger = CronTrigger(hour=22, minute=5)
+    secondTrigger = CronTrigger(hour=10, minute=5)
 
-    sched = BlockingScheduler(jobstores=jobstores, timezone=utc)
+    sched = BlockingScheduler(jobstores=jobstores)
     sched.add_job(rHelper.postDaily, trigger=firstTrigger)
     sched.add_job(rHelper.postDaily, trigger=secondTrigger)
-    if rHelper.debug:
-        sched.add_job(rHelper.postDaily, trigger=CronTrigger(second=30))
 
     for w in weeklies:
         sched.add_job(rHelper.postWeekly, trigger=w.trigger, args=[w])
 
     try:
-        logger.debug("Starting blocking scheduler")
+        logger.info("Starting blocking scheduler")
         sched.start()
     except (KeyboardInterrupt, SystemExit):
-        pass
+        logger.info("Removing all jobs in end exception")
+        sched.remove_all_jobs()
     finally:
+        logger.info("Removing all jobs")
         sched.remove_all_jobs()
 
 class Weekly():
@@ -151,9 +151,9 @@ class Weekly():
             if self.dow == "TEST":
                 self.trigger = CronTrigger(second=(30 + self.time))
             else:
-                self.trigger = CronTrigger(day_of_week=self.dow, hour=self.time, jitter=60)
+                self.trigger = CronTrigger(day_of_week=self.dow, hour=self.time, jitter=60, minute=5)
         else:
-            self.trigger = CronTrigger(day=self.dom, hour=self.time, jitter=60)
+            self.trigger = CronTrigger(day=self.dom, hour=self.time, jitter=60, minute=5)
 
 weeklies = [
     Weekly("Recipe Share", "Offer and request recipes for ourselves and for children. Also brag about things you've cooked!", day_of_month=10),
